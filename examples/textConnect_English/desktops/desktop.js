@@ -8,7 +8,10 @@
     'use strict';
 
     var CONF = kintone.plugin.app.getConfig(PLUGIN_ID);
+    console.log(CONF);
+
     // 設定値読み込み
+    // Load setting values, target fields, resolve fields, delimiters. 
     if (!CONF) {
         return false;
     }
@@ -25,6 +28,7 @@
     function checkTexValue(tex) {
         var tex_changes = '';
         // ユーザー選択、組織選択、グループ選択でnameのみを取得する
+        // Get name only in user selection, organization selection, group selection
         switch (tex['type']) {
             case 'USER_SELECT':
             case 'ORGANIZATION_SELECT':
@@ -35,6 +39,7 @@
                 break;
 
             // 日時のうち、日付だけをトリムする
+            // Trim only the date of the date / time
             case 'DATETIME':
                 if (tex.value !== undefined) {
                     tex_changes = (tex['value']).substr(0, 10);
@@ -42,12 +47,14 @@
                 break;
 
             // 複数の値の場合は配列の0のみを反映する
+            // In case of multiple values, only 0 of the array is reflected
             case 'CHECK_BOX':
             case 'MULTI_SELECT':
                 tex_changes = tex['value'][0];
                 break;
 
             // そのほかのすべてのフィールドタイプ
+            // All other field types
             default :
                 tex_changes = tex['value'];
                 break;
@@ -56,16 +63,23 @@
     }
 
     // 空のフィールドを探す
+    // Calculate joinedText field given selectionArray and record
+    // This is where the field values get joined as one value!
     function fieldValues(record, selectionArry) {
         var fieldarray = [];
+
+        // For all selection fields for the current 
         for (var j = 0; j < 5; j++) {
+
+            // If selection field exists
             if (selectionArry[j] !== '') {
+
                 var tex = record[String(selectionArry[j])];
+                console.log("\'" + tex.value + "\'");
                 if (tex.value !== undefined) {
                     fieldarray.push(checkTexValue(tex));
-                } else {
-                    fieldarray.push('');
                 }
+
             }
 
         }
@@ -74,6 +88,7 @@
 
     function createSelectionArry() {
         // 行毎にselectionの配列を作成
+        // Create selection array for each row
         var selectionArry = [];
         selectionArry[0] = [];
         selectionArry[1] = [];
@@ -87,16 +102,22 @@
 
     function connectField(record) {
         // 各結合項目の処理
+        // Process each set of textConnect fields.
+        // Every iteration, one resolve field is calculated based on it's delimiter and selection fields.
         for (var i = 1; i < 4; i++) {
             var cdcopyfield = CONF['copyfield' + i];
             var cdbetween = CONF['between' + i];
             var selectionArry = createSelectionArry();
             var joinText = fieldValues(record, selectionArry[i - 1]);
+
+            // Special cases for delimiters of '&nbsp;' and '&emsp;'
             if (cdbetween === '&nbsp;') {
                 cdbetween = '\u0020';
             } else if (cdbetween === '&emsp;') {
                 cdbetween = '\u3000';
             }
+
+            // Input back into resolve field
             if (joinText.length > 0) {
                 record[String(cdcopyfield)]['value'] = String(joinText.join(cdbetween));
             }
@@ -104,6 +125,7 @@
     }
 
     // 値に変更があった場合のイベントと保存前イベント
+    // Events when values ​​are changed and events before saving
     function createEvents() {
 
         var changeEvent = ['app.record.edit.submit',
@@ -123,12 +145,14 @@
     }
 
     // 一覧作成編集画面
+    // List creation edit screen
     var events1 = ['app.record.edit.show',
         'app.record.create.show',
         'app.record.index.edit.show'
     ];
 
     // 結合フィールドを入力不可にする
+    // Disable the resolve field (gray out)
     kintone.events.on(events1, function(event) {
         var record = event['record'];
         for (var i = 1; i < 4; i++) {
@@ -140,6 +164,7 @@
     });
 
     // changeイベントとsubmitイベント発火時に文字結合処理を行う
+    // on Change and submit event, we call functions to 
     var valevents = createEvents();
     kintone.events.on(valevents, function connect_texts(event) {
         var record = event.record;
@@ -149,6 +174,7 @@
 
 
     // 保存前イベント
+    // Event before saving
     var submitEvent = ['app.record.edit.submit',
         'app.record.create.submit',
         'app.record.index.edit.submit'
@@ -156,6 +182,7 @@
 
 
     // 保存ボタンを押下したときに空フィールドが指定されているかを確認
+    // After save button is clicked, checks if empty field is sellected or not.
     kintone.events.on(submitEvent, function(event) {
         var record = event.record;
         var selectionArry = createSelectionArry();
@@ -165,10 +192,10 @@
             var jointext = fieldValues(record, selectionArry[m]);
             for (var i = 0; i < jointext.length; i++) {
                 if (!jointext[i]) {
-  // var res = confirm('結合対象のフィールドに空文字が含まれています。登録しますか？');
+                    // var res = confirm('結合対象のフィールドに空文字が含まれています。登録しますか？');
                     var res = confirm('At least one of fields that will be combined has no value. Do you still wish to connect them?');
                     if (res === false) {
-  // event.error = 'キャンセルしました';
+                        // event.error = 'キャンセルしました';
                         event.error = 'Canceled!';
                         return event;
                     }
