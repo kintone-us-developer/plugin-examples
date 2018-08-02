@@ -4,9 +4,13 @@
  *
  * Licensed under the MIT License
  */
+
+//Push with only the localization ability (Changed the manifest file too. jquery version)
 (function(PLUGIN_ID) {
     'use strict';
-
+    
+    // 表示言語切り替え用
+    // Variable stores pop-up message text to be used based on language.
     var terms = {
         'en': {
             emptyCheck: 'At least one of fields that will be combined has no value. Do you still wish to connect them?',
@@ -20,10 +24,9 @@
     var lang = kintone.getLoginUser().language;
     var i18n = (lang in terms) ? terms[lang] : terms['en'];
 
-    var CONF = kintone.plugin.app.getConfig(PLUGIN_ID);
-
     // 設定値読み込み
-    // Load setting values, target fields, resolve fields, delimiters. 
+    // Load setting values such as target fields to connect, resolve fields, and delimiters.
+    var CONF = kintone.plugin.app.getConfig(PLUGIN_ID);
     if (!CONF) {
         return false;
     }
@@ -39,8 +42,9 @@
 
     function checkTexValue(tex) {
         var tex_changes = '';
+
         // ユーザー選択、組織選択、グループ選択でnameのみを取得する
-        // Get name only in user selection, organization selection, group selection
+        // Get the name from user_selection, organization_selection, or group_selection
         switch (tex['type']) {
             case 'USER_SELECT':
             case 'ORGANIZATION_SELECT':
@@ -59,7 +63,7 @@
                 break;
 
             // 複数の値の場合は配列の0のみを反映する
-            // In case of multiple values, only 0 of the array is reflected
+            // In case of multiple values, only the element at the index of 0 in the array is reflected
             case 'CHECK_BOX':
             case 'MULTI_SELECT':
                 tex_changes = tex['value'][0];
@@ -78,20 +82,14 @@
     // Calculate joinedText field given selectionArray and record
     function fieldValues(record, selectionArry) {
         var fieldarray = [];
-
-        // For all selection fields for the current 
         for (var j = 0; j < 5; j++) {
-
-            // If selection field exists
             if (selectionArry[j] !== '') {
-
                 var tex = record[String(selectionArry[j])];
                 if (tex.value !== undefined) {
                     fieldarray.push(checkTexValue(tex));
                 } else {
                     fieldarray.push('');
                 }
-
             }
 
         }
@@ -99,6 +97,7 @@
     }
 
     function createSelectionArry() {
+
         // 行毎にselectionの配列を作成
         // Create selection array for each row
         var selectionArry = [];
@@ -113,38 +112,28 @@
 
 
     function connectField(record) {
+
         // 各結合項目の処理
-        // Process each set of textConnect fields.
         // Every iteration, one resolve field is calculated based on it's delimiter and selection fields.
         for (var i = 1; i < 4; i++) {
             var cdcopyfield = CONF['copyfield' + i];
             var cdbetween = CONF['between' + i];
             var selectionArry = createSelectionArry();
-            var rawTextArray = fieldValues(record, selectionArry[i - 1]); // array of text field values
-
-
-            var filteredTextArray = rawTextArray.filter(function(text) {
-                if (text != '')
-                    return true;
-                return false;
-            });
-
-            // Special cases for delimiters of '&nbsp;' and '&emsp;'
+            var joinText = fieldValues(record, selectionArry[i - 1]);
+            
             if (cdbetween === '&nbsp;') {
                 cdbetween = '\u0020';
             } else if (cdbetween === '&emsp;') {
                 cdbetween = '\u3000';
             }
-
-            // Input back into resolve field
-            if (filteredTextArray.length > 0) {
-                record[String(cdcopyfield)]['value'] = String(filteredTextArray.join(cdbetween));
+            if (joinText.length > 0) {
+                record[String(cdcopyfield)]['value'] = String(joinText.join(cdbetween));
             }
         }
     }
 
     // 値に変更があった場合のイベントと保存前イベント
-    // Events when values ​​are changed and events before saving
+    // Events when the value is changed and before saving
     function createEvents() {
 
         var changeEvent = ['app.record.edit.submit',
@@ -164,7 +153,7 @@
     }
 
     // 一覧作成編集画面
-    // List creation edit screen
+    //Create/edit events
     var events1 = ['app.record.edit.show',
         'app.record.create.show',
         'app.record.index.edit.show'
@@ -183,7 +172,7 @@
     });
 
     // changeイベントとsubmitイベント発火時に文字結合処理を行う
-    // on Change and submit event, we call functions to 
+    // Connect values when the change/submit event is fired
     var valevents = createEvents();
     kintone.events.on(valevents, function connect_texts(event) {
         var record = event.record;
@@ -193,15 +182,16 @@
 
 
     // 保存前イベント
-    // Event before saving
-    var submitEvent = ['app.record.edit.submit',
+    // Events relating to submitting
+    var submitEvent = [
+        'app.record.edit.submit',
         'app.record.create.submit',
         'app.record.index.edit.submit'
     ];
 
 
     // 保存ボタンを押下したときに空フィールドが指定されているかを確認
-    // After save button is clicked, checks if empty field is sellected or not.
+    // Checks if there are any empty fields when saving
     kintone.events.on(submitEvent, function(event) {
         var record = event.record;
         var selectionArry = createSelectionArry();
@@ -211,12 +201,8 @@
             var jointext = fieldValues(record, selectionArry[m]);
             for (var i = 0; i < jointext.length; i++) {
                 if (!jointext[i]) {
-                    // var res = confirm('結合対象のフィールドに空文字が含まれています。登録しますか？');
-                    // var res = confirm('At least one of fields that will be combined has no value. Do you still wish to connect them?');
                     var res = confirm(i18n.emptyCheck);
                     if (res === false) {
-                        // event.error = 'キャンセルしました';
-                        // event.error = 'Canceled.';
                         event.error = i18n.cancel;
                         return event;
                     }
